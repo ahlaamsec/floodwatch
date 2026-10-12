@@ -6,13 +6,15 @@ Testers are anonymised as T1–T5. No names are stored.
 **Confirmed by the researcher on 12 October 2026**
 - The 1–5 rating answered *"How much would you recommend it to others?"* (it was **not** a trust rating).
 - **T3, T4 and T5 speak Twi.** The original v1 had no Twi, so the researcher **added Twi to the app during their sessions**. For these three testers the "before" version was therefore *v1 plus Twi added on the spot*, not v1 as built. Say this plainly in the report.
+- **T1 and T2 used the first version (v1 as built: English and Dagbani). T3, T4 and T5 used v1 with Twi added.**
+- **Ages (researcher's estimates):** T3 a man around his 40s; T4 similar to T1 (45–59); T5 similar to T3 (around 40s).
 - Sabon Jida (T1's area) is in Tamale. T1 spoke Dagbani.
 - **T3, T4 and T5 are in Accra**, where the flooding happened. T5 found the alert **with help**.
 - **Where people got stuck: the part for viewing neighbours' alerts** (the researcher's summary for the testers who needed help; it was not timed or recorded per person).
 - The guardian of T2 (under 18) gave permission.
 - T3's exact comment about the voice/audio was not written down and cannot be recovered. Ask him again when he tries v2.1.
 
-> Still to confirm: which app version T1 and T2 used (presumably v1 as built: English and Dagbani); age ranges for T3–T5. Do not guess them.
+> Nothing essential is left unknown for Round 1. The ages for T3–T5 are estimates, so say so in the report. No task times were taken, and the paper forms were not filled in during the sessions.
 
 ## What testers did and said
 
@@ -20,9 +22,11 @@ Testers are anonymised as T1–T5. No names are stored.
 |---|---|---|---|---|---|---|
 | T1 | Sabon Jida, Tamale | 45–59 | **Dagbani** | With a lot of help | 4 | Understood the purpose; advice made sense; happy to share her area; **asked for live location sharing and for photos of the water level** for friends to see; "very helpful" |
 | T2 | Choggu, Tamale | under 18 | Dagbani | **Without help** | 3 | Understood; advice made sense; **worried about being tracked**, compared it to a film where everything you press is watched |
-| T3 | Accra | adult | **Twi** | With help (UI) | 3 | Very happy to test; found it helpful; **said the voice/audio could be improved** |
-| T4 | Accra | adult | **Twi** | With less help than T1 | ? | Similar to T1; **suggested a place where native speakers can add more Twi** |
-| T5 | Accra | adult | **Twi** | With help | ? | Similar to T3 |
+| T3 | Accra | man, ~40s* | **Twi** | With help (UI) | 3 | Very happy to test; found it helpful; **said the voice/audio could be improved** |
+| T4 | Accra | ~45–59* | **Twi** | With less help than T1 | ? | Similar to T1; **suggested a place where native speakers can add more Twi** |
+| T5 | Accra | ~40s* | **Twi** | With help | ? | Similar to T3 |
+
+\*Ages for T3–T5 are the researcher's estimates (T4 'similar to T1', T5 'similar to T3').
 
 Ratings are how much the tester would recommend the app to others (1–5). Only T1, T2 and T3 gave one (4, 3, 3), so there is nothing to average; report them as individual answers.
 

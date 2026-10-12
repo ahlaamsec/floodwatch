@@ -1,7 +1,7 @@
 [
   {
     "round": "before",
-    "appVersion": "unknown",
+    "appVersion": "1.0",
     "testerId": "T1",
     "area": "Sabon Jida (Tamale)",
     "ageRange": "45-59",
@@ -24,7 +24,7 @@
   },
   {
     "round": "before",
-    "appVersion": "unknown",
+    "appVersion": "1.0",
     "testerId": "T2",
     "area": "Choggu (Tamale)",
     "ageRange": "under-18",
@@ -64,7 +64,7 @@
     "q5Change": "Voice and audio could be improved",
     "ease": null,
     "feeling": "Very happy to test; found it helpful",
-    "notes": "Would-recommend-to-others rating (1-5): 3. Exact feedback about the voice/audio was not written down and cannot be recovered. Entered from researcher's verbal notes. Spoke Twi; v1 had no Twi, so the researcher added Twi during the session.",
+    "notes": "Would-recommend-to-others rating (1-5): 3. Exact feedback about the voice/audio was not written down and cannot be recovered. Entered from researcher's verbal notes. Spoke Twi; v1 had no Twi, so the researcher added Twi during the session. Age (researcher's estimate, 12 Oct 2026): a man around his 40s, which falls between the 30-44 and 45-59 bands, so the age band is left blank.",
     "source": "researcher-notes",
     "recommend": 3
   },
@@ -73,7 +73,7 @@
     "appVersion": "1.0+twi",
     "testerId": "T4",
     "area": "Accra",
-    "ageRange": "",
+    "ageRange": "45-59",
     "language": "twi",
     "date": "2026-10-11",
     "consent": true,
@@ -87,7 +87,7 @@
     "q5Change": "A place where native speakers can add more Twi to the app",
     "ease": null,
     "feeling": "",
-    "notes": "Researcher: responses similar to T1. Entered from researcher's verbal notes. Spoke Twi; v1 had no Twi, so the researcher added Twi during the session.",
+    "notes": "Researcher: responses similar to T1. Entered from researcher's verbal notes. Spoke Twi; v1 had no Twi, so the researcher added Twi during the session. Age band 45-59 is the researcher's estimate: 'similar to T1' (12 Oct 2026).",
     "source": "researcher-notes",
     "recommend": null
   },
@@ -110,7 +110,7 @@
     "q5Change": "",
     "ease": null,
     "feeling": "",
-    "notes": "Researcher: responses similar to T3. Found the alert with help (confirmed by the researcher, 12 Oct 2026). Entered from researcher's verbal notes. Spoke Twi; v1 had no Twi, so the researcher added Twi during the session.",
+    "notes": "Researcher: responses similar to T3. Found the alert with help (confirmed by the researcher, 12 Oct 2026). Entered from researcher's verbal notes. Spoke Twi; v1 had no Twi, so the researcher added Twi during the session. Age (researcher's estimate, 12 Oct 2026): similar to T3, so around 40s; age band left blank.",
     "source": "researcher-notes",
     "recommend": null
   }
