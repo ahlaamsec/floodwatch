@@ -1,0 +1,6 @@
+{
+  "_readme": "List recorded files here, e.g. \"dag/danger\": true once public/audio/dag/danger.mp3 exists.",
+  "dag/watching": false,
+  "dag/rising": false,
+  "dag/danger": false
+}

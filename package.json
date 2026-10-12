@@ -1,0 +1,20 @@
+{
+  "name": "flood-watch",
+  "version": "2.0.0",
+  "description": "Flood Watch: a voice-first, multilingual (English, Twi, Dagbani) neighbour-to-neighbour flood alert app",
+  "type": "module",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server/server.js",
+    "dev": "node --env-file-if-exists=.env --watch server/server.js",
+    "start:env": "node --env-file-if-exists=.env server/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.9"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "4.21.2"
+  }
+}

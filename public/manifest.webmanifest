@@ -1,0 +1,10 @@
+{
+  "name": "Flood Watch",
+  "short_name": "Flood Watch",
+  "description": "Warn your neighbours about flooding — English, Twi, Dagbani.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#F5F2EA",
+  "theme_color": "#0F3D5E",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
