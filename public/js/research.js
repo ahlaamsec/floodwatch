@@ -132,6 +132,7 @@ export async function renderResearch(mount) {
     ...txt("q4Sharing", "4. OK sharing your area? Anything you would not want shared?"),
     ...txt("q5Change", "5. What would you change?"),
     h("label", { class: "f" }, "How easy was it? (1 very hard – 5 very easy)"), radios("ease", [["1", "😣 1"], ["2", "🙁 2"], ["3", "😐 3"], ["4", "🙂 4"], ["5", "😄 5"]]),
+    h("label", { class: "f" }, "How much would they recommend it to others? (1 = not at all, 5 = very much)"), radios("recommend", [1, 2, 3, 4, 5].map((n) => [String(n), String(n)])),
     ...txt("feeling", "How did they feel? (their words if possible)"),
     ...txt("notes", "Notes and quotes"),
     h("button", { class: "btn primary mt", type: "submit" }, "Save this tester"),
@@ -144,8 +145,9 @@ export async function renderResearch(mount) {
       language: val("language"), date: f.date.value.trim(), consent: f.consent.checked, completed: val("completed"),
       taskSeconds: f.taskSeconds.value.trim(), taskTaps: f.taskTaps.value.trim(), stuck: f.stuck.value, q1Purpose: f.q1Purpose.value,
       q2Advice: f.q2Advice.value, trust: val("trust"), trustWhy: f.trustWhy.value, q4Sharing: f.q4Sharing.value,
-      q5Change: f.q5Change.value, ease: val("ease"), feeling: f.feeling.value, notes: f.notes.value,
-      appVersion: val("round") === "before" ? "1.0" : "2.0", source: result ? "timed-task" : "entered",
+      q5Change: f.q5Change.value, ease: val("ease"), recommend: val("recommend"), feeling: f.feeling.value, notes: f.notes.value,
+      appVersion: val("round") === "before" ? "1.0" : "", // empty: the server fills in the real app version (not a stale "2.0")
+      source: result ? "timed-task" : "entered",
     };
     if (!s.consent) return toast("Tick consent first (or don't record this person).");
     try { await api.saveSession(s); SS.del("fw.taskResult"); toast("Saved ✓"); renderResearch(mount); }
@@ -159,7 +161,7 @@ export async function renderResearch(mount) {
     const nums = (k) => S.map((s) => Number(s[k])).filter((x) => x > 0);
     const avg = (k) => { const a = nums(k); return a.length ? (a.reduce((x, y) => x + y, 0) / a.length).toFixed(1) : "–"; };
     const med = (k) => { const a = nums(k).sort((x, y) => x - y); return a.length ? (a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2) : "–"; };
-    return { n: S.length, yes: pct("yes"), help: pct("with_help"), no: pct("no"), trust: avg("trust"), ease: avg("ease"), time: med("taskSeconds"), taps: med("taskTaps") };
+    return { n: S.length, yes: pct("yes"), help: pct("with_help"), no: pct("no"), trust: avg("trust"), ease: avg("ease"), recommend: avg("recommend"), time: med("taskSeconds"), taps: med("taskTaps") };
   };
   const B = stats("before"), A = stats("after");
   const row = (label, b, a) => h("tr", {}, h("td", {}, label), h("td", {}, String(b)), h("td", {}, String(a)));
@@ -173,11 +175,12 @@ export async function renderResearch(mount) {
         row("Median time (s)", B.time, A.time),
         row("Median taps", B.taps, A.taps),
         row("Avg trust (1–5)", B.trust, A.trust),
-        row("Avg ease (1–5)", B.ease, A.ease))),
+        row("Avg ease (1–5)", B.ease, A.ease),
+        row("Avg would recommend (1–5)", B.recommend, A.recommend))),
     h("p", { class: "muted" }, "Small groups: report these as descriptive numbers, not proof. Quotes matter more than percentages here."));
 
   // ---------- list + export ----------
-  const cols = ["round", "appVersion", "testerId", "area", "ageRange", "language", "date", "completed", "taskSeconds", "taskTaps", "stuck", "q1Purpose", "q2Advice", "trust", "trustWhy", "q4Sharing", "q5Change", "ease", "feeling", "notes", "source"];
+  const cols = ["round", "appVersion", "testerId", "area", "ageRange", "language", "date", "completed", "taskSeconds", "taskTaps", "stuck", "q1Purpose", "q2Advice", "trust", "trustWhy", "q4Sharing", "q5Change", "ease", "recommend", "feeling", "notes", "source"];
   const download = (name, text, type) => { const a = h("a", { href: URL.createObjectURL(new Blob([text], { type })), download: name }); document.body.append(a); a.click(); a.remove(); };
   const csv = () => [cols.join(","), ...sessions.map((s) => cols.map((c) => `"${String(s[c] ?? "").replace(/"/g, '""')}"`).join(","))].join("\n");
   const list = h("div", { class: "card box rs" }, h("h2", {}, `Saved testers (${sessions.length})`),

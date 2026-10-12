@@ -65,7 +65,7 @@ You need **Node.js 22.9 or newer** (https://nodejs.org).
 cd flood-watch
 npm install
 npm start          # → http://localhost:3000
-npm test           # 24 automated tests (13 for the API, 11 for the Vercel/Redis storage)
+npm test           # 25 automated tests (14 for the API, 11 for the Vercel/Redis storage)
 ```
 
 Optional keys go in a `.env` file. Copy `.env.example` to `.env` and fill in what you have:

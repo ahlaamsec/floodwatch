@@ -489,6 +489,7 @@ export function createApp(options = {}) {
       q4Sharing: clean(b.q4Sharing, 800),
       q5Change: clean(b.q5Change, 800),
       ease: n(b.ease),
+      recommend: [1, 2, 3, 4, 5].includes(n(b.recommend)) ? n(b.recommend) : null,
       feeling: clean(b.feeling, 400),
       notes: clean(b.notes, 1500),
       source: clean(b.source, 40) || "entered",
@@ -504,7 +505,7 @@ export function createApp(options = {}) {
     res.json({ ok: true });
   });
   app.get("/api/sessions.csv", researchOnly, (req, res) => {
-    const cols = ["round", "appVersion", "testerId", "area", "ageRange", "language", "date", "completed", "taskSeconds", "taskTaps", "stuck", "q1Purpose", "q2Advice", "trust", "trustWhy", "q4Sharing", "q5Change", "ease", "feeling", "notes", "source"];
+    const cols = ["round", "appVersion", "testerId", "area", "ageRange", "language", "date", "completed", "taskSeconds", "taskTaps", "stuck", "q1Purpose", "q2Advice", "trust", "trustWhy", "q4Sharing", "q5Change", "ease", "recommend", "feeling", "notes", "source"];
     const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const csv = [cols.join(","), ...store.db.sessions.map((s) => cols.map((c) => esc(s[c])).join(","))].join("\n");
     res.type("text/csv").set("Content-Disposition", "attachment; filename=flood-watch-sessions.csv").send(csv);

@@ -71,6 +71,17 @@ test("research sessions require consent and valid round", async () => {
   assert.match(csv, /"before","1.0","T1"/);
 });
 
+test("sessions keep the 'would recommend' score (1-5 only) and export it", async () => {
+  const ok = await (await post("/api/sessions", { round: "after", consent: true, testerId: "T9", recommend: "5" })).json();
+  assert.equal(ok.session.recommend, 5);
+  const bad = await (await post("/api/sessions", { round: "after", consent: true, testerId: "T8", recommend: "9" })).json();
+  assert.equal(bad.session.recommend, null);
+  assert.equal((await (await post("/api/sessions", { round: "after", consent: true, testerId: "T7" })).json()).session.recommend, null);
+  assert.equal(ok.session.appVersion, "2.1.0", "an after-round session is tagged with the real app version");
+  const csv = await (await fetch(base + "/api/sessions.csv")).text();
+  assert.match(csv.split("\n")[0], /"?ease"?,"?recommend"?,/);
+});
+
 test("voice notes upload and play back", async () => {
   const r = await fetch(base + "/api/voice", { method: "POST", headers: { "Content-Type": "audio/webm" }, body: new Uint8Array([1, 2, 3]) });
   const { id } = await r.json();
