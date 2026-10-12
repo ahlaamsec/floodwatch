@@ -34,15 +34,14 @@ Research question: *Can residents understand, trust and act on peer-to-peer floo
           │  JSON over HTTPS
           ▼
  Node.js + Express  (server/server.js)
-   ├─ data/db.json          alerts, votes (hashed), sessions, phrase reviews
-   ├─ data/voice/           voice notes (deleted after 24 h)
-   ├─ data/phrases/         speakers' recordings of each phrase
+   ├─ store.js   → data on your computer: data/db.json + data/voice, photos, phrases (deleted after 24 h where noted)
+   │               data on Vercel: Upstash Redis (storage.js), same shape, nothing else changes
    ├─ ai.js      → Google Gemini (optional key) or checked answers
    ├─ khaya.js   → GhanaNLP Khaya: Twi/Dagbani translation, speech-to-text, text-to-speech (optional key)
    └─ weather.js → Open-Meteo forecast for the AREA CENTRE (no key)
 ```
 
-There is no database server and only one dependency (Express). The data is one JSON file you can open and read.
+There is no database server and only one dependency (Express). On your computer the data is one JSON file you can open and read. On Vercel the same data lives in a free Upstash Redis database, because Vercel cannot keep files.
 
 ### Privacy decisions
 - No accounts. No names, phone numbers or coordinates are stored or sent.
@@ -66,7 +65,7 @@ You need **Node.js 22.9 or newer** (https://nodejs.org).
 cd flood-watch
 npm install
 npm start          # → http://localhost:3000
-npm test           # 13 automated tests
+npm test           # 24 automated tests (13 for the API, 11 for the Vercel/Redis storage)
 ```
 
 Optional keys go in a `.env` file. Copy `.env.example` to `.env` and fill in what you have:
@@ -76,7 +75,7 @@ Optional keys go in a `.env` file. Copy `.env.example` to `.env` and fill in wha
 | `GEMINI_API_KEY` | AI answers in the helper | https://aistudio.google.com/apikey |
 | `KHAYA_API_KEY` | Machine voice and speech recognition for Twi and Dagbani, plus a "machine suggestion" button in the Language Studio | https://translation.ghananlp.org (GhanaNLP). Check their current free allowance when you sign up |
 | `RESEARCH_PIN` | Protects the research pages | Choose any number |
-| `TOKEN_SALT` | Keeps one-vote-per-phone working after restarts | Any long random text |
+| `TOKEN_SALT` | Keeps one-vote-per-phone working after restarts | Any long random text. On Vercel it is optional: one is made from the Redis token |
 
 **The app works with no keys at all.** The helper then uses the checked answers, and Twi/Dagbani audio comes from the speakers' own recordings in the Language Studio.
 
@@ -84,18 +83,31 @@ Optional keys go in a `.env` file. Copy `.env.example` to `.env` and fill in wha
 
 Phones only allow the **microphone and location on HTTPS**, so a plain `http://192.168…` link will not work for those features.
 
-**Fastest (tonight, from your laptop):** run `npm start`, then in a second terminal:
+### Vercel (free, lasting, updates itself when you push to GitHub)
+
+1. **Import the repo.** On vercel.com: **Add New → Project →** pick `floodwatch` → **Deploy**. Vercel finds the Express app in `app.js` by itself and serves `public/` from its CDN. No build settings needed.
+2. **Add the database (required).** In the project: **Storage → Create / Connect → Upstash for Redis** (free plan), connect it to this project, then **Deployments → ⋯ → Redeploy**. Vercel adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` for you. Without this the app still opens, but everything is forgotten when the function restarts.
+3. **Optional settings** (Project → Settings → Environment Variables): `RESEARCH_PIN`, `TOKEN_SALT`, `GEMINI_API_KEY`, `KHAYA_API_KEY`. Redeploy after changing them.
+4. **Check it.** Open `https://YOUR-SITE.vercel.app/api/health`. You should see `"storage":"redis","persistent":true`. If it says `"persistent":false`, step 2 is missing or the variables are wrong (the page says which).
+
+Things to know:
+- Alerts, votes, test sessions, voice notes and photos are shared by everyone who opens the link. Voice notes and photos expire after 25 hours by themselves.
+- If two people save at the very same instant on two different servers, one save can be lost. That is fine for a test with a few dozen people. For a real launch, use a proper database.
+- The "too many requests" limit counts per server, so it is a polite brake, not a strong defence.
+- Free plan: Upstash allows 500,000 commands a month. Each open app uses about two a minute, so a testing day is far below that.
+- **Export your test sessions (CSV/JSON) after every testing day**, and again before you ever delete the database.
+
+### Quick test from your laptop
+
 ```bash
+npm start
 npx cloudflared tunnel --url http://localhost:3000
 ```
 It prints an `https://….trycloudflare.com` link. Send that to testers. It works while your laptop is on.
 
-**Lasting (free): Render.com**
-1. Put this folder on GitHub (the `.gitignore` keeps `data/` and `.env` out).
-2. On render.com: **New → Web Service** → pick the repo.
-3. Build command `npm install` · Start command `npm start`.
-4. Add your keys under **Environment**.
-5. Note: on the free plan the disk is wiped on every redeploy and the service sleeps when unused. **Export your test sessions (CSV/JSON) after every testing day.**
+### Any host with a normal disk (for example Render.com)
+
+New → Web Service → pick the repo. Build command `npm install`, start command `npm start`, add your keys under Environment. On the free plan the disk is wiped on every redeploy and the service sleeps when unused, so export your sessions often.
 
 ---
 
@@ -125,13 +137,21 @@ Recordings are used by the app straight away. Typed corrections are downloaded a
 ## Files
 
 ```
+app.js                 Vercel entry point (the same app, exported)
+vercel.json            security headers for Vercel
 server/server.js       API + serves the site
-server/{ai,khaya,weather,store,areas}.js
+server/store.js        data: files on your computer, Redis on Vercel
+server/storage.js      the small Upstash Redis client
+server/{ai,khaya,weather,areas}.js
 public/index.html      page + icons (water-level pictures)
 public/css/app.css     design: big text, ≥56px buttons, light/dark
 public/js/*.js         app, api, i18n, voice, research
 public/sw.js           offline support
-test/api.test.js       automated tests
+test/api.test.js       API tests
+test/redis.test.js     the same app on a fake Redis (two "servers" sharing one database)
+docs/research/         Round 1 data and findings, the heuristic UI audit, test sheets
+docs/ui-screen-board.html   annotated screens, v1 and v2 side by side
+v1/                    the original prototype, unchanged (the "before" version of Round 1)
 ```
 
 The area coordinates in `public/js/shared/areas.js` are approximate. Check them with people who live there and correct them before any real use.

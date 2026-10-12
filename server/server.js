@@ -1,13 +1,14 @@
 // Flood Watch v2 — backend
 // One small Express server: serves the website from /public and a JSON API under /api.
-// Data lives in data/db.json (plus audio files in data/). No accounts, no names, no exact locations.
+// Data lives in data/db.json (plus audio files in data/), or in Upstash Redis when hosted on Vercel
+// (see store.js). No accounts, no names, no exact locations.
 import express from "express";
-import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { CITIES, findArea } from "./areas.js";
 import { createStore } from "./store.js";
+import { redisFromEnv } from "./storage.js";
 import { ask } from "./ai.js";
 import { khayaEnabled, tts, asr, translate } from "./khaya.js";
 import { rainOutlook } from "./weather.js";
@@ -19,9 +20,18 @@ const LEVELS = ["watching", "rising", "danger"];
 const LANGS = ["en", "twi", "dag"];
 const ALERT_SHOW_HOURS = 12; // shown in the list
 const ALERT_KEEP_HOURS = 24; // deleted (with voice note) after this
-const SALT = process.env.TOKEN_SALT || crypto.randomBytes(16).toString("hex");
+const BLOB_TTL = (ALERT_KEEP_HOURS + 1) * 3600; // voice notes and photos expire by themselves in Redis
+const TTS_TTL = 7 * 24 * 3600;
+const VOICE_ID = /^[a-f0-9]{12}$/;
 
-const hashToken = (t) => crypto.createHash("sha256").update(SALT + String(t)).digest("hex").slice(0, 16);
+/** "One vote per phone" needs the same salt every time. Without TOKEN_SALT we derive one from the
+ *  Redis token (stable across serverless restarts) or, on a normal server, make a random one. */
+function makeHasher(redis) {
+  const salt =
+    process.env.TOKEN_SALT ||
+    (redis ? crypto.createHash("sha256").update("fw-salt|" + redis.token).digest("hex") : crypto.randomBytes(16).toString("hex"));
+  return (t) => crypto.createHash("sha256").update(salt + String(t)).digest("hex").slice(0, 16);
+}
 const newId = () => crypto.randomBytes(6).toString("hex");
 const clean = (s, max) => String(s ?? "").replace(/[\u0000-\u001f<>]/g, " ").trim().slice(0, max);
 
@@ -39,9 +49,40 @@ function rateLimit(max, windowMs) {
   };
 }
 
-export function createApp({ dataDir = path.join(__dirname, "..", "data") } = {}) {
-  const store = createStore(dataDir);
-  fs.mkdirSync(path.join(dataDir, "photos"), { recursive: true });
+/** Send bytes with HTTP Range support. Safari/iPhone will not play <audio> without it. */
+function sendBytes(req, res, { data, type }, fallbackType) {
+  res.set("Accept-Ranges", "bytes");
+  res.type(type || fallbackType);
+  const m = /^bytes=(\d*)-(\d*)$/.exec(req.get("range") || "");
+  if (m && (m[1] || m[2])) {
+    let start = m[1] === "" ? Math.max(0, data.length - Number(m[2])) : Number(m[1]);
+    let end = m[1] === "" || m[2] === "" ? data.length - 1 : Math.min(Number(m[2]), data.length - 1);
+    if (start > end || start >= data.length) {
+      res.set("Content-Range", `bytes */${data.length}`);
+      return res.status(416).end();
+    }
+    res.status(206).set("Content-Range", `bytes ${start}-${end}/${data.length}`);
+    return res.send(data.subarray(start, end + 1));
+  }
+  return res.send(data);
+}
+
+/** Express 4 does not catch errors thrown in async routes; this hands them to the error handler. */
+const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+/** Where files go when the host has a normal disk. Vercel only allows writing in /tmp. */
+const defaultDataDir = () => (process.env.VERCEL ? "/tmp/flood-watch-data" : path.join(__dirname, "..", "data"));
+
+/**
+ * createApp()                  -> uses Upstash Redis if its environment variables are set, else files
+ * createApp({ dataDir })       -> always files (tests, local experiments)
+ * createApp({ redis })         -> that Redis client (tests)
+ */
+export function createApp(options = {}) {
+  const redis = options.redis !== undefined ? options.redis : options.dataDir ? null : redisFromEnv();
+  const dataDir = options.dataDir || defaultDataDir();
+  const store = createStore(dataDir, { redis });
+  const hashToken = makeHasher(redis);
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
@@ -101,35 +142,88 @@ export function createApp({ dataDir = path.join(__dirname, "..", "data") } = {})
     for (const a of store.db.alerts) {
       if (a.ts >= cutoff) keep.push(a);
       else {
-        if (a.voiceId) fs.rm(path.join(dataDir, "voice", a.voiceId + ".audio"), { force: true }, () => {});
-        if (a.photoId) fs.rm(path.join(dataDir, "photos", a.photoId + ".jpg"), { force: true }, () => {});
+        if (a.voiceId) store.blobs.del("voice", a.voiceId).catch(() => {});
+        if (a.photoId) store.blobs.del("photos", a.photoId).catch(() => {});
       }
     }
     if (keep.length !== store.db.alerts.length) {
       store.db.alerts = keep;
       store.save();
     }
-    // Orphan voice notes / photos (uploaded but never attached) older than 24h
-    for (const sub of ["voice", "photos"]) {
-      const dir = path.join(dataDir, sub);
-      for (const f of fs.readdirSync(dir)) {
-        const p = path.join(dir, f);
-        if (fs.statSync(p).mtimeMs < cutoff) fs.rmSync(p, { force: true });
-      }
-    }
+    // Uploaded but never attached to an alert (files only; in Redis they expire on their own)
+    store.blobs.sweep?.(cutoff);
   }
-  cleanup();
-  const cleanupTimer = setInterval(cleanup, 10 * 60 * 1000);
-  cleanupTimer.unref();
+
+  // ---------- Redis mode: load before, save before answering ----------
+  // A serverless function can be frozen as soon as it has answered, so changes must be saved first.
+  // Requests that touch the data wait for each other (one at a time per running instance) so two
+  // people voting at the same moment cannot overwrite each other.
+  if (store.mode === "redis") {
+    const needsDb = /^\/(alerts|practice-alerts|phrases|sessions)/;
+    let queue = Promise.resolve();
+    app.use("/api", (req, res, next) => {
+      if (!needsDb.test(req.path)) return next();
+      const before = queue;
+      let release;
+      queue = new Promise((r) => (release = r));
+      const unlock = () => release();
+      const timeout = setTimeout(unlock, 15000); // never let one stuck request block everyone
+      res.once("close", () => { clearTimeout(timeout); unlock(); });
+
+      before.then(async () => {
+        try {
+          await store.load();
+          cleanup();
+        } catch (e) {
+          console.error(e);
+          return res.status(503).json({ error: "Storage is not available right now" });
+        }
+        const end = res.end.bind(res);
+        res.end = (...args) => {
+          store.commit().then(
+            () => end(...args),
+            (e) => {
+              console.error(e);
+              res.removeHeader("Content-Length");
+              res.removeHeader("ETag");
+              res.status(503).type("json");
+              end(JSON.stringify({ error: "Could not save. Please try again." }));
+            }
+          );
+          return res;
+        };
+        next();
+      });
+    });
+  } else {
+    cleanup();
+    const cleanupTimer = setInterval(cleanup, 10 * 60 * 1000);
+    cleanupTimer.unref();
+  }
 
   // ---------- public API ----------
-  app.get("/api/health", (req, res) => {
+  app.get("/api/health", wrap(async (req, res) => {
+    // On Vercel without Redis, data is lost whenever the function restarts; and a wrong or
+    // unreachable Redis is the most likely deployment mistake. So this page really tests it.
+    let persistent = store.mode === "redis" || !process.env.VERCEL;
+    let problem;
+    if (store.mode === "redis") {
+      try {
+        await store.redis.cmd("EXISTS", "fw:db");
+      } catch (e) {
+        persistent = false;
+        problem = "Cannot reach Redis. Check the KV_REST_API_URL and KV_REST_API_TOKEN variables.";
+      }
+    }
     res.json({
       ok: true,
       version: APP_VERSION,
       features: { ai: Boolean(process.env.GEMINI_API_KEY), khaya: khayaEnabled(), researchPin: Boolean(process.env.RESEARCH_PIN) },
+      storage: store.mode === "redis" ? "redis" : "files",
+      persistent,
+      ...(problem ? { problem } : {}),
     });
-  });
+  }));
 
   app.get("/api/areas", (req, res) => res.json({ cities: CITIES }));
 
@@ -141,14 +235,14 @@ export function createApp({ dataDir = path.join(__dirname, "..", "data") } = {})
     res.json({ alerts: list.sort((a, b) => b.ts - a.ts).map(publicAlert), serverTime: Date.now() });
   });
 
-  app.post("/api/alerts", writeLimit, (req, res) => {
+  app.post("/api/alerts", writeLimit, wrap(async (req, res) => {
     const b = req.body || {};
     const area = findArea(b.areaId);
     if (!area) return res.status(400).json({ error: "Unknown area" });
     if (!LEVELS.includes(b.level)) return res.status(400).json({ error: "Choose how bad the water is" });
     const landmark = clean(b.landmark, 120);
-    const voiceId = b.voiceId && /^[a-f0-9]{12}$/.test(b.voiceId) && fs.existsSync(path.join(dataDir, "voice", b.voiceId + ".audio")) ? b.voiceId : null;
-    const photoId = b.photoId && /^[a-f0-9]{12}$/.test(b.photoId) && fs.existsSync(path.join(dataDir, "photos", b.photoId + ".jpg")) ? b.photoId : null;
+    const voiceId = b.voiceId && VOICE_ID.test(b.voiceId) && (await store.blobs.has("voice", b.voiceId)) ? b.voiceId : null;
+    const photoId = b.photoId && VOICE_ID.test(b.photoId) && (await store.blobs.has("photos", b.photoId)) ? b.photoId : null;
     if (!landmark && !voiceId) return res.status(400).json({ error: "Say or type where the water is" });
 
     const alert = {
@@ -169,7 +263,7 @@ export function createApp({ dataDir = path.join(__dirname, "..", "data") } = {})
     store.db.alerts.push(alert);
     store.save();
     res.status(201).json({ alert: publicAlert(alert) });
-  });
+  }));
 
   // Research mode: add one clearly-labelled PRACTICE alert per area so every tester
   // has something to find in their own area during the timed task.
@@ -219,36 +313,34 @@ export function createApp({ dataDir = path.join(__dirname, "..", "data") } = {})
   });
 
   // Voice notes: someone records "where" instead of typing. Deleted after 24h.
-  app.post("/api/voice", writeLimit, rawAudio, (req, res) => {
+  app.post("/api/voice", writeLimit, rawAudio, wrap(async (req, res) => {
     if (!req.body?.length) return res.status(400).json({ error: "No audio" });
     const id = newId();
-    fs.writeFileSync(path.join(dataDir, "voice", id + ".audio"), req.body);
-    fs.writeFileSync(path.join(dataDir, "voice", id + ".type"), clean(req.get("content-type"), 60));
+    await store.blobs.put("voice", id, req.body, { type: clean(req.get("content-type"), 60), ttl: BLOB_TTL });
     res.status(201).json({ id });
-  });
-  app.get("/api/voice/:id", (req, res) => {
-    if (!/^[a-f0-9]{12}$/.test(req.params.id)) return res.status(400).end();
-    const p = path.join(dataDir, "voice", req.params.id + ".audio");
-    if (!fs.existsSync(p)) return res.status(404).end();
-    const t = path.join(dataDir, "voice", req.params.id + ".type");
-    res.type(fs.existsSync(t) ? fs.readFileSync(t, "utf8") : "audio/webm").sendFile(p);
-  });
+  }));
+  app.get("/api/voice/:id", wrap(async (req, res) => {
+    if (!VOICE_ID.test(req.params.id)) return res.status(400).end();
+    const b = await store.blobs.get("voice", req.params.id);
+    if (!b) return res.status(404).end();
+    sendBytes(req, res, b, "audio/webm");
+  }));
 
   // Photos of the water. The phone re-draws the picture before upload, which removes
   // hidden GPS/camera data (EXIF). Deleted with the alert after 24h.
-  app.post("/api/photo", writeLimit, express.raw({ type: ["image/jpeg"], limit: "1.5mb" }), (req, res) => {
+  app.post("/api/photo", writeLimit, express.raw({ type: ["image/jpeg"], limit: "1.5mb" }), wrap(async (req, res) => {
     const b = req.body;
     if (!b?.length || b[0] !== 0xff || b[1] !== 0xd8) return res.status(400).json({ error: "Send a JPEG photo" });
     const id = newId();
-    fs.writeFileSync(path.join(dataDir, "photos", id + ".jpg"), b);
+    await store.blobs.put("photos", id, b, { type: "image/jpeg", ttl: BLOB_TTL });
     res.status(201).json({ id });
-  });
-  app.get("/api/photo/:id", (req, res) => {
-    if (!/^[a-f0-9]{12}$/.test(req.params.id)) return res.status(400).end();
-    const p = path.join(dataDir, "photos", req.params.id + ".jpg");
-    if (!fs.existsSync(p)) return res.status(404).end();
-    res.type("image/jpeg").sendFile(p);
-  });
+  }));
+  app.get("/api/photo/:id", wrap(async (req, res) => {
+    if (!VOICE_ID.test(req.params.id)) return res.status(400).end();
+    const b = await store.blobs.get("photos", req.params.id);
+    if (!b) return res.status(404).end();
+    sendBytes(req, res, { data: b.data, type: "image/jpeg" });
+  }));
 
   app.get("/api/rain/:areaId", async (req, res) => {
     const area = findArea(req.params.areaId);
@@ -263,21 +355,24 @@ export function createApp({ dataDir = path.join(__dirname, "..", "data") } = {})
     res.json(await ask(question, lang));
   });
 
-  // Machine text-to-speech for Twi/Dagbani (only if a Khaya key is set). Cached on disk.
-  app.get("/api/tts", async (req, res) => {
+  // Machine text-to-speech for Twi/Dagbani (only if a Khaya key is set). Cached (disk, or Redis for a week).
+  app.get("/api/tts", wrap(async (req, res) => {
     const lang = req.query.lang;
     const text = clean(req.query.text, 400);
     if (!khayaEnabled()) return res.status(501).json({ error: "Machine voice not configured" });
     if (!["twi", "dag", "en"].includes(lang) || !text) return res.status(400).end();
     const key = crypto.createHash("sha1").update(lang + "|" + text).digest("hex");
-    const p = path.join(dataDir, "tts-cache", key + ".wav");
     try {
-      if (!fs.existsSync(p)) fs.writeFileSync(p, await tts(text, lang));
-      res.type("audio/wav").sendFile(p);
+      let b = await store.blobs.get("tts-cache", key);
+      if (!b) {
+        b = { data: Buffer.from(await tts(text, lang)), type: "audio/wav" };
+        await store.blobs.put("tts-cache", key, b.data, { type: "audio/wav", ttl: TTS_TTL });
+      }
+      sendBytes(req, res, { data: b.data, type: "audio/wav" });
     } catch (e) {
       res.status(502).json({ error: "Voice service failed" });
     }
-  });
+  }));
 
   // Machine speech-to-text (expects 16 kHz mono WAV, which the browser makes for us).
   app.post("/api/asr", rateLimit(30, 10 * 60 * 1000), rawAudio, async (req, res) => {
@@ -294,31 +389,34 @@ export function createApp({ dataDir = path.join(__dirname, "..", "data") } = {})
   // ---------- Language Studio (native speakers review + record phrases) ----------
   const PHRASE_KEY = /^[a-zA-Z0-9_.]{1,60}$/;
   app.get("/api/phrases/audio", (req, res) => res.json(store.db.phraseAudio));
-  app.get("/api/phrases/audio/:lang/:key", (req, res) => {
+  app.get("/api/phrases/audio/:lang/:key", wrap(async (req, res) => {
     const { lang, key } = req.params;
     if (!LANGS.includes(lang) || !PHRASE_KEY.test(key)) return res.status(400).end();
     const meta = store.db.phraseAudio[lang]?.[key];
-    const p = path.join(dataDir, "phrases", `${lang}__${key}.audio`);
-    if (!meta || !fs.existsSync(p)) return res.status(404).end();
-    res.set("Cache-Control", "no-cache").type(meta.type || "audio/webm").sendFile(p);
-  });
-  app.put("/api/phrases/audio/:lang/:key", researchOnly, rawAudio, (req, res) => {
+    const b = meta && (await store.blobs.get("phrases", `${lang}__${key}`));
+    if (!b) return res.status(404).end();
+    res.set("Cache-Control", "no-cache");
+    sendBytes(req, res, { data: b.data, type: meta.type }, "audio/webm");
+  }));
+  app.put("/api/phrases/audio/:lang/:key", researchOnly, rawAudio, wrap(async (req, res) => {
     const { lang, key } = req.params;
     if (!LANGS.includes(lang) || !PHRASE_KEY.test(key)) return res.status(400).end();
     if (!req.body?.length) return res.status(400).json({ error: "No audio" });
-    fs.writeFileSync(path.join(dataDir, "phrases", `${lang}__${key}.audio`), req.body);
+    const type = clean(req.get("content-type"), 60);
+    await store.blobs.put("phrases", `${lang}__${key}`, req.body, { type });
     store.db.phraseAudio[lang] ||= {};
-    store.db.phraseAudio[lang][key] = { type: clean(req.get("content-type"), 60), speaker: clean(req.get("x-speaker-id"), 10), at: Date.now() };
+    store.db.phraseAudio[lang][key] = { type, speaker: clean(req.get("x-speaker-id"), 10), at: Date.now() };
     store.save();
     res.status(201).json({ ok: true });
-  });
-  app.delete("/api/phrases/audio/:lang/:key", researchOnly, (req, res) => {
+  }));
+  app.delete("/api/phrases/audio/:lang/:key", researchOnly, wrap(async (req, res) => {
     const { lang, key } = req.params;
+    if (!LANGS.includes(lang) || !PHRASE_KEY.test(key)) return res.status(400).end();
     if (store.db.phraseAudio[lang]) delete store.db.phraseAudio[lang][key];
-    fs.rmSync(path.join(dataDir, "phrases", `${lang}__${key}.audio`), { force: true });
+    await store.blobs.del("phrases", `${lang}__${key}`);
     store.save();
     res.json({ ok: true });
-  });
+  }));
 
   app.get("/api/phrases/review", (req, res) => res.json({ reviews: store.db.phraseReviews }));
   // Anyone may suggest a better wording (text only, rate-limited). Recordings still need the researcher PIN,
@@ -415,6 +513,7 @@ export function createApp({ dataDir = path.join(__dirname, "..", "data") } = {})
   app.use("/api", (req, res) => res.status(404).json({ error: "Not found" }));
 
   // ---------- website ----------
+  // (On Vercel the public/ folder is served by its CDN and this line is ignored.)
   app.use(express.static(path.join(__dirname, "..", "public"), { extensions: ["html"] }));
 
   app.use((err, req, res, next) => {
