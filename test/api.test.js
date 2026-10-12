@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createApp } from "../server/server.js";
+import { createApp, APP_VERSION } from "../server/server.js";
 import { matchArea } from "../server/areas.js";
 import { faqAnswer } from "../public/js/shared/faq.js";
 import { classify } from "../server/weather.js";
@@ -77,9 +77,15 @@ test("sessions keep the 'would recommend' score (1-5 only) and export it", async
   const bad = await (await post("/api/sessions", { round: "after", consent: true, testerId: "T8", recommend: "9" })).json();
   assert.equal(bad.session.recommend, null);
   assert.equal((await (await post("/api/sessions", { round: "after", consent: true, testerId: "T7" })).json()).session.recommend, null);
-  assert.equal(ok.session.appVersion, "2.1.0", "an after-round session is tagged with the real app version");
+  assert.equal(ok.session.appVersion, APP_VERSION, "an after-round session is tagged with the real app version");
   const csv = await (await fetch(base + "/api/sessions.csv")).text();
   assert.match(csv.split("\n")[0], /"?ease"?,"?recommend"?,/);
+});
+
+test("the home list has a heading that says these are the neighbours' warnings", () => {
+  assert.equal(STRINGS.en.neighbourWarnings, "Warnings from your neighbours");
+  assert.ok(STRINGS.twi.neighbourWarnings, "Twi draft exists (to be checked by native speakers)");
+  assert.equal(STRINGS.dag.neighbourWarnings, undefined, "no Dagbani yet: shown in English until a speaker adds it");
 });
 
 test("voice notes upload and play back", async () => {

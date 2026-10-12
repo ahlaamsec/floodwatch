@@ -42,7 +42,7 @@ Ratings are how much the tester would recommend the app to others (1–5). Only 
 
 ## Design responses in v2.1 (each linked to evidence)
 
-> **Not yet clearly solved:** people got stuck at *viewing neighbours' alerts*. v2.1 adds a How-to card and read-aloud, but (from reading the code) the alert list still sits below the red report button, the emergency button, the 'I am safe / I need help' buttons and the How-to card, and nothing on the screen says these are warnings from neighbours. Round 2's timed task measures exactly this step, so any change to it should be made, and written down, **before** Round 2.
+> **Where people got stuck: viewing neighbours' alerts.** v2.1 added a How-to card and read-aloud, but (from reading the code) the alert list still sat below the red report button, the emergency button, the 'I am safe / I need help' buttons and the How-to card, and nothing said these were warnings from neighbours. **v2.1.1 adds a heading, "Warnings from your neighbours", with a speaker button, directly above the list; moves the How-to card below the list; and stops the floating "Ask the helper" button covering the first warning on small phones.** (The last two were found by testing the screen on a 360×640 phone, not by testers.) Whether this helps is for Round 2's timed task to show. Round 2 must use v2.1.1 or later.
 
 | Finding | Change |
 |---|---|

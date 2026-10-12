@@ -318,6 +318,10 @@ async function Home() {
     h("div", { class: "row", style: "margin-bottom:14px" },
       h("a", { class: "btn ghost", href: "#/checkin/safe" }, icon("i-check"), t("imSafe")),
       h("a", { class: "btn ghost", href: "#/checkin/help", style: "color:var(--danger)" }, t("needHelp"))),
+    h("div", { class: "heading", style: "margin:4px 0 10px" }, h("h2", {}, t("neighbourWarnings")), sayBtn("neighbourWarnings")),
+    tabs, list,
+    // First-time help sits UNDER the warnings: people got stuck at viewing neighbours' alerts (Round 1),
+    // so on a first visit the list must be on screen, not pushed down by this card.
     prefs.howToDone ? null : (() => {
       const card = h("div", { class: "card box", style: "margin:0 0 14px" },
         h("div", { class: "heading", style: "margin:0 0 6px" }, h("h2", {}, t("howToTitle")), sayBtn("howToTitle")),
@@ -325,12 +329,11 @@ async function Home() {
         h("button", { class: "btn primary mt", type: "button", onclick: () => { prefs.howToDone = true; savePrefs(); card.remove(); } }, t("gotIt")));
       return card;
     })(),
-    tabs, list,
-    h("a", { class: "fab", href: "#/helper" }, icon("i-chat"), t("askHelper")),
+    h("a", { class: "fab", href: "#/helper", "aria-label": t("askHelper"), title: t("askHelper") }, icon("i-chat"), h("span", { class: "fab-label" }, t("askHelper"))),
   );
   await draw();
   drawRain();
-  autoRead(prefs.howToDone ? [["reportBig"]] : [["howTo1"], ["howTo2"], ["howTo3"]]);
+  autoRead(prefs.howToDone ? [["reportBig"], ["neighbourWarnings"]] : [["neighbourWarnings"], ["howTo1"], ["howTo2"], ["howTo3"]]);
   clearInterval(homeTimer);
   homeTimer = setInterval(() => (location.hash === "#/" || location.hash === "") ? draw() : clearInterval(homeTimer), 60000);
 }

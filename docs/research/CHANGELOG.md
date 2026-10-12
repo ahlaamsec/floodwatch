@@ -15,4 +15,13 @@ Every change should point to its source: **A#** = the heuristic audit (`ui-audit
 | "Was this advice helpful?" (anonymous counts at `/api/stats`) | Measurement | Evaluation |
 | Offline: last alerts saved on the phone | Floods cut connections | Reliability |
 | "Practice alert" label on demo data | A7, test honesty | Research ethics |
-| _Round 1 changes go here (T1, T2, …)_ | | |
+| **Round 1 changes (v2.1)** | | |
+| "How to use" card (3 steps, can be heard) and a first-run "Should the app talk to you?" | T1, T3, T5 needed help (Round 1) | Inclusion |
+| First-run "What Flood Watch knows about you" (spoken) and "Delete everything this app saved on my phone" | T2 feared being tracked | Privacy |
+| "I am safe" / "I need help" messages sent by the person on WhatsApp; exact location only if they tick a box and never sent to Flood Watch | T1 wanted live location; T2 feared tracking | Privacy, control |
+| Optional photo of the water; the phone strips hidden location data (EXIF) | T1 | Trust, privacy |
+| "Help improve Twi and Dagbani": suggestions from anyone, recordings only from the research team | T4 | Language ownership |
+| **Round 1 → v2.1.1** | | |
+| A heading "Warnings from your neighbours" (with a speaker button) directly above the alert list; read aloud for people who chose "talk to me" | Researcher's summary: the step where people got stuck was viewing neighbours' alerts (T1, T3, T4, T5 needed help) | Inclusion, core function |
+| The "How to use" card moved from above the list to below it, so on a first visit the warnings are on screen (they were below the screen, at about 860 px on an 844 px phone) | Same: viewing neighbours' alerts. Found by testing the screen, not by testers | Inclusion, core function |
+| On phones the "Ask the helper" button is now a normal button at the end of the page; it floats only on wide screens. On a 360×640 phone the floating button covered the first warning | Same. Found by testing the screen on a small phone | Inclusion |

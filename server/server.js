@@ -14,7 +14,7 @@ import { khayaEnabled, tts, asr, translate } from "./khaya.js";
 import { rainOutlook } from "./weather.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const APP_VERSION = "2.1.0";
+export const APP_VERSION = "2.1.1";
 
 const LEVELS = ["watching", "rising", "danger"];
 const LANGS = ["en", "twi", "dag"];

@@ -1,5 +1,5 @@
 // Offline support: keep the app shell on the phone, and the last list of alerts.
-const CACHE = "fw-v2.1";
+const CACHE = "fw-v2.1.1";
 const SHELL = ["./", "index.html", "css/app.css", "js/app.js", "js/api.js", "js/i18n.js", "js/voice.js", "js/research.js",
   "js/shared/areas.js", "js/shared/faq.js", "icon.svg", "manifest.webmanifest"];
 
