@@ -338,6 +338,24 @@ function Onboarding({ tr, onDone }) {
   );
 }
 
+// Browser storage (works outside Claude's artifact sandbox). Note: localStorage is
+// per-device, so alerts are NOT shared between different people's phones yet.
+const store = {
+  get(key) {
+    try {
+      const value = window.localStorage.getItem(key);
+      return value === null ? null : { value };
+    } catch (e) {
+      return null;
+    }
+  },
+  set(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (e) {}
+  },
+};
+
 export default function FloodAlertApp() {
   const [lang, setLang] = useState("en");
   const [userArea, setUserArea] = useState(null);
@@ -353,11 +371,11 @@ export default function FloodAlertApp() {
   useEffect(() => {
     (async () => {
       try {
-        const areaRes = await window.storage?.get("flood-user-area", false);
+        const areaRes = store.get("flood-user-area");
         if (areaRes?.value) setUserArea(areaRes.value);
       } catch (e) {}
       try {
-        const alertsRes = await window.storage?.get("flood-alerts", true);
+        const alertsRes = store.get("flood-alerts");
         if (alertsRes?.value) {
           const parsed = JSON.parse(alertsRes.value);
           if (Array.isArray(parsed) && parsed.length) setAlerts(parsed);
@@ -369,14 +387,14 @@ export default function FloodAlertApp() {
 
   const persistAlerts = async (next) => {
     try {
-      await window.storage?.set("flood-alerts", JSON.stringify(next), true);
+      store.set("flood-alerts", JSON.stringify(next));
     } catch (e) {}
   };
 
   const finishOnboarding = async (area) => {
     setUserArea(area);
     try {
-      await window.storage?.set("flood-user-area", area, false);
+      store.set("flood-user-area", area);
     } catch (e) {}
   };
 
